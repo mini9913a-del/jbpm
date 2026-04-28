@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AntiGravity | AI 퍼포먼스 마케팅 플랫폼</title>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SheetJS (Excel Parsing) -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <!-- PptxGenJS -->
+    <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2><i data-lucide="settings"></i> 시스템 설정 (AI 연동)</h2>
+                <button class="btn-icon" onclick="app.closeSettings()"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 20px; color: var(--text-secondary); font-size: 0.9rem;">
+                    엑셀 자동 분석 및 성과 요약을 위해 Google Gemini API 키가 필요합니다. 
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: var(--accent-primary);">무료 키 발급받기</a>
+                </p>
+                <div class="input-group">
+                    <label>Gemini API Key</label>
+                    <input type="password" id="api-key-input" placeholder="AIzaSy..." autocomplete="off">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="app.closeSettings()">취소</button>
+                <button class="btn-primary" onclick="app.saveSettings()">저장하기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Template Guide Modal -->
+    <div id="template-modal" class="modal">
+        <div class="modal-content glass-panel" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2><i data-lucide="file-spreadsheet"></i> 표준 엑셀 템플릿 가이드</h2>
+                <button class="btn-icon" onclick="document.getElementById('template-modal').classList.remove('active')"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body" style="line-height: 1.6;">
+                <p>가장 빠르고 정확한 분석을 위해 엑셀 파일을 아래 <strong>표준 양식</strong>으로 구성해 주세요.</p>
+                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin: 15px 0;">
+                    <ul style="list-style-type: disc; margin-left: 20px; color: var(--text-secondary);">
+                        <li><strong>탭(Sheet) 이름:</strong> 매체명으로 지정해 주세요. (예: <code>네이버</code>, <code>구글</code>, <code>메타</code>)</li>
+                        <li><strong>1번째 줄 (헤더):</strong> 반드시 다음 항목들을 포함해야 합니다.<br/>
+                            <code style="color: var(--accent-primary);">일자</code>, <code style="color: var(--accent-primary);">광고비</code>, <code style="color: var(--accent-primary);">노출수</code>, <code style="color: var(--accent-primary);">클릭수</code>, <code style="color: var(--accent-primary);">전환수</code>, <code style="color: var(--accent-primary);">매출액</code>
+                        </li>
+                    </ul>
+                </div>
+                <p style="font-size: 0.9rem; color: var(--text-muted);">* 각 탭에 작성된 데이터는 자동으로 병합되어 대시보드에 반영되며, 매체별 코멘트가 하단에 별도로 생성됩니다.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" onclick="document.getElementById('template-modal').classList.remove('active')">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <!-- Sidebar Navigation (Hidden on Login View) -->
+        <aside id="app-sidebar" class="sidebar glass-panel">
+            <div class="sidebar-brand">
+                <i data-lucide="brain-circuit"></i>
+                <span>AntiGravity</span>
+            </div>
+            <nav class="sidebar-nav">
+                <button class="nav-item active" onclick="app.showView('upload-view')" data-view="upload-view">
+                    <i data-lucide="upload-cloud"></i>
+                    <span>리포트 업로드</span>
+                </button>
+                <button class="nav-item" onclick="app.showView('history-view')" data-view="history-view">
+                    <i data-lucide="history"></i>
+                    <span>데이터 히스토리</span>
+                </button>
+                <button class="nav-item" onclick="app.showView('dashboard-view')" id="nav-dashboard" disabled>
+                    <i data-lucide="layout-dashboard"></i>
+                    <span>분석 대시보드</span>
+                </button>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="nav-item" onclick="app.openSettings()">
+                    <i data-lucide="settings"></i>
+                    <span>설정</span>
+                </button>
+                <button class="nav-item" onclick="app.logout()">
+                    <i data-lucide="log-out"></i>
+                    <span>로그아웃</span>
+                </button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <!-- 1. Login View -->
+            <section id="login-view" class="view active">
+                <div class="glass-panel login-panel">
+                    <div class="logo-area">
+                        <i data-lucide="brain-circuit" class="logo-icon" style="color: #c084fc;"></i>
+                        <h1>AntiGravity</h1>
+                        <p class="subtitle">AI-Powered Performance Analytics</p>
+                    </div>
+                    <form id="login-form">
+                        <div class="input-group">
+                            <label>이메일</label>
+                            <input type="email" value="marketer@antigravity.com" required>
+                        </div>
+                        <div class="input-group">
+                            <label>비밀번호</label>
+                            <input type="password" value="password" required>
+                        </div>
+                        <button type="submit" class="btn-primary" style="background: linear-gradient(135deg, #3b82f6, #8b5cf6);">AI 대시보드 로그인</button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- 2. Advertiser Selection -->
+            <section id="advertiser-view" class="view">
+                <div class="glass-panel advertiser-panel" style="margin: auto; margin-top: 100px;">
+                    <h2>광고주 선택</h2>
+                    <p>성과를 분석할 광고주 계정을 선택하세요.</p>
+                    <div class="advertiser-grid">
+                        <button class="adv-card" onclick="app.selectAdvertiser('Brand A')">
+                            <i data-lucide="briefcase"></i>
+                            <span>Brand A (커머스)</span>
+                        </button>
+                        <button class="adv-card" onclick="app.selectAdvertiser('App B')">
+                            <i data-lucide="smartphone"></i>
+                            <span>App B (앱서비스)</span>
+                        </button>
+                        <button class="adv-card" onclick="app.selectAdvertiser('Startup C')">
+                            <i data-lucide="rocket"></i>
+                            <span>Startup C (B2B)</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. File Upload View -->
+            <section id="upload-view" class="view">
+                <header class="view-header">
+                    <div class="view-title">
+                        <i data-lucide="upload-cloud"></i>
+                        <h2 id="current-advertiser-name">Brand A</h2>
+                    </div>
+                </header>
+                <div class="upload-container">
+                    <h2>표준 리포트 업로드</h2>
+                    <p>매체별로 탭(시트)이 나뉜 <strong>표준 양식(.xlsx)</strong> 엑셀 파일을 올려주세요.<br/>모든 탭의 데이터를 한 번에 분석하여 누적 저장합니다.</p>
+                    
+                    <button class="btn-secondary btn-sm" onclick="document.getElementById('template-modal').classList.add('active')" style="margin-top: 10px; margin-bottom: 20px;"><i data-lucide="info"></i> 표준 엑셀 양식 보기</button>
+
+                    <div class="drop-zone" id="drop-zone">
+                        <i data-lucide="upload-cloud" class="upload-icon"></i>
+                        <h3>파일을 여기로 드래그 앤 드롭 하세요</h3>
+                        <p>또는 클릭하여 파일 선택 (.xlsx)</p>
+                        <input type="file" id="file-input" accept=".xlsx" hidden>
+                    </div>
+                    
+                    <div id="loading-spinner" style="display: none; margin-top: 30px; text-align: center;">
+                        <div class="ai-loader">
+                            <div class="ai-orb"></div>
+                            <i data-lucide="brain-circuit" class="ai-icon-center"></i>
+                        </div>
+                        <p id="loading-text" style="margin-top: 15px; font-weight: 600; color: #c084fc;">데이터를 분석하고 있습니다...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. History View -->
+            <section id="history-view" class="view">
+                <header class="view-header">
+                    <div class="view-title">
+                        <i data-lucide="history"></i>
+                        <h2>데이터 히스토리</h2>
+                    </div>
+                </header>
+                <div class="history-content">
+                    <div class="table-card">
+                        <div class="table-header">
+                            <h3>저장된 리포트 목록</h3>
+                            <p>업로드된 모든 데이터를 여기서 관리할 수 있습니다.</p>
+                        </div>
+                        <div class="table-container">
+                            <table id="history-table">
+                                <thead>
+                                    <tr>
+                                        <th>업로드 일시</th>
+                                        <th>광고주</th>
+                                        <th>리포트 기간</th>
+                                        <th>매체 구성</th>
+                                        <th>총 광고비</th>
+                                        <th>평균 ROAS</th>
+                                        <th>작업</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="history-list">
+                                    <!-- Dynamic Content -->
+                                    <tr>
+                                        <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                                            저장된 데이터가 없습니다. 리포트를 업로드해 주세요.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 5. Dashboard View -->
+            <section id="dashboard-view" class="view">
+                <header class="view-header">
+                    <div class="view-title">
+                        <i data-lucide="bar-chart-2"></i>
+                        <h2 id="dash-advertiser-name">Brand A</h2>
+                        <div class="mode-selector glass-panel">
+                            <button class="mode-btn active" id="mode-perf" onclick="app.setAnalysisMode('performance')">
+                                <i data-lucide="target"></i> 성과 중심
+                            </button>
+                            <button class="mode-btn" id="mode-traffic" onclick="app.setAnalysisMode('traffic')">
+                                <i data-lucide="mouse-pointer-2"></i> 트래픽 중심
+                            </button>
+                        </div>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn-primary" onclick="app.exportToPPT()" id="btn-export-ppt" disabled style="background-color: #f59e0b; color: white;">
+                            <i data-lucide="file-down"></i> PPT 내보내기
+                        </button>
+                    </div>
+                </header>
+                
+                <div class="dashboard-content">
+                    <!-- Overall AI Insight Panel -->
+                    <div class="ai-insight-panel glass-panel">
+                        <div class="ai-insight-header">
+                            <i data-lucide="sparkles" style="color: #fcd34d;"></i>
+                            <h3>전체 통합 성과 요약</h3>
+                        </div>
+                        <div class="ai-insight-body" id="ai-insight-text">
+                            <span class="pulse-text">데이터를 바탕으로 인사이트를 도출하고 있습니다...</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI Cards -->
+                    <div class="kpi-grid">
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i data-lucide="dollar-sign"></i></div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">총 광고비</span>
+                                <h3 class="kpi-value" id="kpi-spend">0</h3>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon highlight"><i data-lucide="target"></i></div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">총 전환수</span>
+                                <h3 class="kpi-value" id="kpi-conversions">0</h3>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i data-lucide="shopping-cart"></i></div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">총 매출액</span>
+                                <h3 class="kpi-value" id="kpi-revenue">0</h3>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon accent"><i data-lucide="trending-up"></i></div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">평균 ROAS</span>
+                                <h3 class="kpi-value" id="kpi-roas">0%</h3>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i data-lucide="crosshair"></i></div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">평균 CPA</span>
+                                <h3 class="kpi-value" id="kpi-cpa">0</h3>
+                            </div>
+                        </div>
+                        <div class="kpi-card" style="border: 1px solid var(--accent-primary); background: rgba(59, 130, 246, 0.05);">
+                            <div class="kpi-icon accent"><i data-lucide="mouse-pointer-click"></i></div>
+                            <div class="kpi-info">
+                                <span class="kpi-label" style="color: var(--accent-primary); font-weight: bold;">평균 CTR</span>
+                                <h3 class="kpi-value" id="kpi-ctr">0%</h3>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Area -->
+                    <div class="charts-grid">
+                        <div class="chart-card large">
+                            <h3>일자별 클릭 및 CTR 트렌드</h3>
+                            <div class="chart-container">
+                                <canvas id="trendChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <h3 id="campaign-chart-title">매체별 성과 (전환수 & CPA)</h3>
+                            <div class="chart-container">
+                                <canvas id="campaignChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Data Table Area -->
+                    <div class="table-card" id="media-tables-container">
+                        <!-- Media specific tables injected via JS -->
+                    </div>
+
+                    <!-- Media Insights Area -->
+                    <div class="media-insights-wrapper" style="margin-top: 40px; margin-bottom: 20px;">
+                        <h3 style="margin-bottom: 20px; display: flex; align-items: center; gap: 8px; font-size: 1.2rem;">
+                            <i data-lucide="layers" style="color: var(--accent-primary);"></i> 
+                            매체별 광고 인사이트 분석
+                        </h3>
+                        <div id="media-insights-grid" class="media-insights-grid">
+                            <p style="color: var(--text-muted); font-size: 0.9rem;">데이터를 분석하여 매체별 코멘트를 생성하고 있습니다...</p>
+                        </div>
+                    </div>
+
+                    <!-- Future Proposal Area -->
+                    <div class="ai-insight-panel glass-panel" style="margin-top: 30px; border-top: 4px solid var(--accent-primary);">
+                        <div class="ai-insight-header">
+                            <i data-lucide="compass" style="color: var(--accent-primary);"></i>
+                            <h3>향후 운영 제안 및 전략</h3>
+                        </div>
+                        <div class="ai-insight-body" id="ai-future-proposal">
+                            <span class="pulse-text">인사이트 분석과 함께 향후 전략을 수립 중입니다...</span>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
