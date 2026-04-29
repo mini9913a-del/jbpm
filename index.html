@@ -83,6 +83,10 @@
                     <i data-lucide="history"></i>
                     <span>데이터 히스토리</span>
                 </button>
+                <button class="nav-item" onclick="app.showView('connection-view')" data-view="connection-view">
+                    <i data-lucide="link"></i>
+                    <span>매체 연동 관리</span>
+                </button>
                 <button class="nav-item" onclick="app.showView('dashboard-view')" id="nav-dashboard" disabled>
                     <i data-lucide="layout-dashboard"></i>
                     <span>분석 대시보드</span>
@@ -217,6 +221,52 @@
                 </div>
             </section>
 
+            <!-- 6. Connection View (New) -->
+            <section id="connection-view" class="view">
+                <header class="view-header">
+                    <div class="view-title">
+                        <i data-lucide="link"></i>
+                        <h2>매체 연동 관리</h2>
+                    </div>
+                </header>
+                <div class="connection-content" style="padding: 30px 40px;">
+                    <div class="info-banner glass-panel" style="margin-bottom: 30px; border-left: 4px solid var(--accent-primary); padding: 15px; background: rgba(59, 130, 246, 0.05);">
+                        <p><i data-lucide="info" style="width:18px; display:inline-block; vertical-align:middle; margin-right:8px;"></i> 
+                        광고 계정 API를 연동하면 엑셀 업로드 없이 매일 자동으로 성과 데이터를 수집합니다.</p>
+                    </div>
+
+                    <div class="connection-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;">
+                        <!-- Meta Card -->
+                        <div class="connection-card glass-panel" style="padding: 25px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                                <span class="media-badge meta" style="font-size: 1rem; padding: 6px 12px;">Meta (FB/IG)</span>
+                                <span class="badge" style="background: rgba(239, 68, 68, 0.1); color: var(--danger);">연동 필요</span>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 15px;">
+                                <label style="display:block; margin-bottom:8px; font-size:0.9rem; color:var(--text-secondary);">광고 계정 ID (Ad Account ID)</label>
+                                <input type="text" placeholder="act_xxxxxxxxxxxx" class="glass-input" style="width:100%;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 20px;">
+                                <label style="display:block; margin-bottom:8px; font-size:0.9rem; color:var(--text-secondary);">액세스 토큰 (Access Token)</label>
+                                <input type="password" placeholder="EAAxxxx..." class="glass-input" style="width:100%;">
+                            </div>
+                            <button class="btn-primary" style="width:100%;" onclick="alert('곧 업데이트 예정입니다! 우선 서버 구동을 완료해 주세요.')">
+                                <i data-lucide="save"></i> 설정 저장 및 연동 테스트
+                            </button>
+                        </div>
+
+                        <!-- Naver Card (Placeholder) -->
+                        <div class="connection-card glass-panel" style="padding: 25px; opacity: 0.6;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                                <span class="media-badge naver" style="font-size: 1rem; padding: 6px 12px;">Naver Search Ad</span>
+                                <span class="badge">준비 중</span>
+                            </div>
+                            <p style="font-size:0.9rem; color:var(--text-muted); text-align:center; padding: 20px 0;">네이버 API 연동 기능은<br/>곧 추가될 예정입니다.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- 5. Dashboard View -->
             <section id="dashboard-view" class="view">
                 <header class="view-header">
@@ -345,6 +395,7 @@
         </main>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app.js"></script>
 </body>
 </html>
