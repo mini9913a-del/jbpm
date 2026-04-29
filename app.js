@@ -6,57 +6,110 @@ const state = {
     apiKey: localStorage.getItem('gemini_api_key') || '',
 };
 
-// --- Database Layer (IndexedDB) ---
-const db = {
-    dbName: 'AntiGravityDB',
-    version: 1,
-    storeName: 'reports',
+// --- Cloud Database Layer (Supabase) ---
+const SUPABASE_URL = 'https://bzesxbnfwoptpbormmza.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6ZXN4Ym5md29wdHBib3JtbXphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMTcxOTYsImV4cCI6MjA5Mjg5MzE5Nn0.qeZ9ap8SYyvnbxb8FNLfQA0a5OZ6oDtXSu2U5oEsSzc';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    init() {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(this.dbName, this.version);
-            request.onupgradeneeded = (e) => {
-                const db = e.target.result;
-                if (!db.objectStoreNames.contains(this.storeName)) {
-                    db.createObjectStore(this.storeName, { keyPath: 'id' });
-                }
+const server = {
+    async getAllReports() {
+        try {
+            const { data, error } = await sb
+                .from('reports')
+                .select('id, advertiser, timestamp, period, media_list, total_spend, avg_roas, analysis_mode')
+                .order('timestamp', { ascending: false });
+            
+            if (error) {
+                if (error.code === 'PGRST205') throw new Error("데이터베이스에 'reports' 테이블이 없습니다. 관리자 설정을 완료해 주세요.");
+                throw error;
+            }
+            // Map snake_case to camelCase
+            return data.map(r => ({
+                id: r.id,
+                advertiser: r.advertiser,
+                timestamp: Number(r.timestamp),
+                period: r.period,
+                mediaList: r.media_list,
+                totalSpend: r.total_spend,
+                avgRoas: r.avg_roas,
+                analysisMode: r.analysis_mode
+            }));
+        } catch (e) {
+            console.error('불러오기 실패:', e);
+            throw new Error('데이터 목록을 가져오지 못했습니다: ' + (e.message || '네트워크 오류'));
+        }
+    },
+
+    async getReport(id) {
+        try {
+            const { data, error } = await sb
+                .from('reports')
+                .select('*')
+                .eq('id', id)
+                .single();
+            
+            if (error) throw error;
+            return {
+                id: data.id,
+                advertiser: data.advertiser,
+                timestamp: Number(data.timestamp),
+                period: data.period,
+                mediaList: data.media_list,
+                totalSpend: data.total_spend,
+                avgRoas: data.avg_roas,
+                data: data.data,
+                aiData: data.ai_data,
+                analysisMode: data.analysis_mode
             };
-            request.onsuccess = (e) => resolve(e.target.result);
-            request.onerror = (e) => reject(e.target.error);
-        });
+        } catch (e) {
+            console.error('상세 로드 실패:', e);
+            throw new Error('리포트 상세 데이터를 가져오지 못했습니다.');
+        }
     },
 
     async saveReport(report) {
-        const d = await this.init();
-        return new Promise((resolve, reject) => {
-            const tx = d.transaction(this.storeName, 'readwrite');
-            const store = tx.objectStore(this.storeName);
-            const request = store.put(report);
-            request.onsuccess = () => resolve();
-            request.onerror = () => reject(request.error);
-        });
-    },
+        try {
+            const dbData = {
+                id: report.id,
+                advertiser: report.advertiser,
+                timestamp: report.timestamp,
+                period: report.period,
+                media_list: report.mediaList,
+                total_spend: report.totalSpend,
+                avg_roas: report.avgRoas,
+                data: report.data,
+                ai_data: report.aiData,
+                analysis_mode: report.analysisMode
+            };
 
-    async getAllReports() {
-        const d = await this.init();
-        return new Promise((resolve, reject) => {
-            const tx = d.transaction(this.storeName, 'readonly');
-            const store = tx.objectStore(this.storeName);
-            const request = store.getAll();
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+            const { error } = await sb
+                .from('reports')
+                .upsert(dbData);
+            
+            if (error) throw error;
+            return { success: true };
+        } catch (e) {
+            console.error('저장 실패:', e);
+            if (e.code === 'PGRST205') {
+                throw new Error("저장 실패: 'reports' 테이블이 없습니다. SQL 에디터에서 테이블 생성 코드를 실행해 주세요.");
+            }
+            throw new Error('데이터 저장 중 오류가 발생했습니다: ' + e.message);
+        }
     },
 
     async deleteReport(id) {
-        const d = await this.init();
-        return new Promise((resolve, reject) => {
-            const tx = d.transaction(this.storeName, 'readwrite');
-            const store = tx.objectStore(this.storeName);
-            const request = store.delete(id);
-            request.onsuccess = () => resolve();
-            request.onerror = () => reject(request.error);
-        });
+        try {
+            const { error } = await sb
+                .from('reports')
+                .delete()
+                .eq('id', id);
+            
+            if (error) throw error;
+            return { success: true };
+        } catch (e) {
+            console.error('삭제 실패:', e);
+            throw new Error('데이터 삭제 중 오류가 발생했습니다.');
+        }
     }
 };
 
@@ -161,7 +214,7 @@ const app = {
 
     async loadHistory() {
         try {
-            state.reports = await db.getAllReports();
+            state.reports = await server.getAllReports();
         } catch (e) {
             console.error('Failed to load history:', e);
         }
@@ -201,42 +254,46 @@ const app = {
     },
 
     async loadReport(id) {
-        const report = state.reports.find(r => r.id === id);
-        if (!report) return;
+        try {
+            const report = await server.getReport(id);
+            if (!report) return;
 
-        state.currentReport = report;
-        state.advertiser = report.advertiser;
-        
-        document.getElementById('dash-advertiser-name').textContent = report.advertiser;
-        document.getElementById('nav-dashboard').disabled = false;
-        
-        // Sync Mode UI
-        this.updateModeUI(report.analysisMode || 'performance');
-        
-        this.renderDashboard(report.data);
-        
-        // AI insights if exists
-        const insightEl = document.getElementById('ai-insight-text');
-        const mediaGrid = document.getElementById('media-insights-grid');
-        const propEl = document.getElementById('ai-future-proposal');
+            state.currentReport = report;
+            state.advertiser = report.advertiser;
+            
+            document.getElementById('dash-advertiser-name').textContent = report.advertiser;
+            document.getElementById('nav-dashboard').disabled = false;
+            
+            // Sync Mode UI
+            this.updateModeUI(report.analysisMode || 'performance');
+            
+            this.renderDashboard(report.data);
+            
+            // AI insights if exists
+            const insightEl = document.getElementById('ai-insight-text');
+            const mediaGrid = document.getElementById('media-insights-grid');
+            const propEl = document.getElementById('ai-future-proposal');
 
-        if (report.aiData) {
-            this.renderAIContent(report.aiData);
-            document.getElementById('btn-export-ppt').disabled = false;
-        } else {
-            insightEl.innerHTML = '<span class="pulse-text">AI 분석 데이터가 없습니다.</span>';
-            mediaGrid.innerHTML = '';
-            propEl.innerHTML = '';
-            document.getElementById('btn-export-ppt').disabled = true;
+            if (report.aiData) {
+                this.renderAIContent(report.aiData);
+                document.getElementById('btn-export-ppt').disabled = false;
+            } else {
+                insightEl.innerHTML = '<span class="pulse-text">AI 분석 데이터가 없습니다.</span>';
+                mediaGrid.innerHTML = '';
+                propEl.innerHTML = '';
+                document.getElementById('btn-export-ppt').disabled = true;
+            }
+
+            this.showView('dashboard-view');
+        } catch (e) {
+            alert('리포트 로드 실패: ' + e.message);
         }
-
-        this.showView('dashboard-view');
     },
 
     async deleteReport(id) {
         if (!confirm('이 리포트를 삭제하시겠습니까?')) return;
         try {
-            await db.deleteReport(id);
+            await server.deleteReport(id);
             await this.loadHistory();
             this.renderHistory();
             if (state.currentReport && state.currentReport.id === id) {
@@ -260,7 +317,130 @@ const app = {
             await this.generateAIInsights();
         }
         
-        await db.saveReport(state.currentReport);
+        await server.saveReport(state.currentReport);
+    },
+
+    // --- Connection Management ---
+    saveConnection() {
+        const adId = document.getElementById('meta-ad-id').value.trim();
+        const token = document.getElementById('meta-token').value.trim();
+        const advertiser = document.getElementById('meta-advertiser').value.trim();
+
+        if (!adId || !token || !advertiser) {
+            alert('모든 정보를 입력해주세요.');
+            return;
+        }
+
+        const config = { adId, token, advertiser };
+        localStorage.setItem('meta_config', JSON.stringify(config));
+        alert('메타 연동 정보가 저장되었습니다.');
+        this.updateConnectionUI();
+    },
+
+    loadConnection() {
+        const configRaw = localStorage.getItem('meta_config');
+        if (configRaw) {
+            const config = JSON.parse(configRaw);
+            document.getElementById('meta-ad-id').value = config.adId || '';
+            document.getElementById('meta-token').value = config.token || '';
+            document.getElementById('meta-advertiser').value = config.advertiser || '';
+            this.updateConnectionUI();
+        }
+    },
+
+    updateConnectionUI() {
+        const configRaw = localStorage.getItem('meta_config');
+        const badge = document.getElementById('meta-status-badge');
+        const btn = document.getElementById('btn-meta-sync');
+        
+        if (configRaw && badge && btn) {
+            badge.textContent = '연동 완료';
+            badge.style.background = 'rgba(16, 185, 129, 0.1)';
+            badge.style.color = 'var(--success)';
+            btn.disabled = false;
+        }
+    },
+
+    async syncMeta() {
+        const configRaw = localStorage.getItem('meta_config');
+        if (!configRaw) {
+            alert('연동 정보를 먼저 저장해주세요.');
+            return;
+        }
+
+        const config = JSON.parse(configRaw);
+        const btn = document.getElementById('btn-meta-sync');
+        const originalHtml = btn.innerHTML;
+        
+        btn.innerHTML = '<i class="spin">⏳</i> 데이터 가져오는 중...';
+        btn.disabled = true;
+
+        try {
+            const allMapped = await metaApi.fetchInsights(config.adId, config.token);
+            
+            if (allMapped.length === 0) {
+                throw new Error('최근 30일간 수집된 성과 데이터가 없습니다.');
+            }
+
+            // UI Advertiser name update
+            state.advertiser = config.advertiser;
+            
+            // Re-use logic from handleFile to save report
+            await this.processRawData(allMapped);
+            
+            alert('메타 데이터 수집 및 리포트 생성이 완료되었습니다!');
+        } catch (e) {
+            console.error(e);
+            alert('메타 데이터 수집 실패: ' + e.message);
+        } finally {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+        }
+    },
+
+    // Helper to process data common to Excel and API
+    async processRawData(allMapped) {
+        // Calculate Summary for Storage
+        let totalSpend = 0, totalRev = 0;
+        const mediaSet = new Set();
+        const dates = [];
+
+        allMapped.forEach(r => {
+            totalSpend += r.spend;
+            totalRev += r.revenue;
+            mediaSet.add(r.media);
+            if (r.date !== 'N/A') dates.push(r.date);
+        });
+
+        const sortedDates = dates.sort();
+        const period = sortedDates.length > 0 ? `${sortedDates[0]} ~ ${sortedDates[sortedDates.length - 1]}` : 'N/A';
+        
+        const reportId = 'report_' + Date.now();
+        const newReport = {
+            id: reportId,
+            advertiser: state.advertiser,
+            timestamp: Date.now(),
+            period: period,
+            mediaList: Array.from(mediaSet),
+            totalSpend: totalSpend,
+            avgRoas: totalSpend > 0 ? (totalRev / totalSpend) * 100 : 0,
+            data: allMapped,
+            aiData: null,
+            analysisMode: 'performance' 
+        };
+
+        await server.saveReport(newReport);
+        await this.loadHistory();
+        
+        state.currentReport = newReport;
+        document.getElementById('nav-dashboard').disabled = false;
+        
+        this.renderDashboard(allMapped);
+        this.showView('dashboard-view');
+        
+        if(state.apiKey) {
+            this.generateAIInsights();
+        }
     },
 
     updateModeUI(mode) {
@@ -421,7 +601,7 @@ const app = {
                     analysisMode: totalConv === 0 ? 'traffic' : 'performance' // Auto-detect
                 };
 
-                await db.saveReport(newReport);
+                await server.saveReport(newReport);
                 await this.loadHistory();
                 
                 state.currentReport = newReport;
@@ -681,10 +861,10 @@ ${JSON.stringify(mediaSummary)}
             
             const aiData = JSON.parse(text);
             
-            // Save to DB
+            // Save to server
             if (state.currentReport) {
                 state.currentReport.aiData = aiData;
-                await db.saveReport(state.currentReport);
+                await server.saveReport(state.currentReport);
                 await this.loadHistory();
             }
 
